@@ -1,0 +1,91 @@
+
+DECLARE xml    		NAMESPACE 'http://www.w3.org/XML/1998/namespace';
+DECLARE soapenv12 	NAMESPACE 'http://www.w3.org/2003/05/soap-envelope';
+DECLARE tempNS 		NAMESPACE 'http://tempuri.org/';
+
+DECLARE ADD CONSTANT CHAR 'Add';
+DECLARE SUB CONSTANT CHAR 'Subtract';
+DECLARE MUL CONSTANT CHAR 'Multiply';
+DECLARE DIV CONSTANT CHAR 'Divide';
+DECLARE QMD001A CONSTANT CHAR 'QMD001A';
+DECLARE QMD002A CONSTANT CHAR 'QMD002A';
+DECLARE BRD001A CONSTANT CHAR 'BRD001A';
+DECLARE BRD002A CONSTANT CHAR 'BRD002A';
+DECLARE MQRESPONSE CONSTANT CHAR 'MQ.RESPONSE';
+
+CREATE COMPUTE MODULE Calculate
+	CREATE FUNCTION Main() RETURNS BOOLEAN
+	BEGIN
+		DECLARE inRef REFERENCE TO InputRoot;
+		DECLARE outRef REFERENCE TO OutputRoot;
+		CALL CopyMessageHeaders();
+		IF NOT EXISTS(OutputRoot.XMLNSC.*[]) THEN
+			CREATE LASTCHILD OF OutputRoot DOMAIN 'XMLNSC';
+		END IF;
+		-- CORRELATE RESPONSE TO REQUEST INSTANCE
+		SET OutputRoot.MQMD.CorrelId = InputRoot.MQMD.MsgId;
+		
+		DECLARE broker CHAR FIELDVALUE(InputRoot.XMLNSC.*.(XMLNSC.Attribute)broker);
+		
+		DECLARE operation CHAR FIELDNAME(InputRoot.XMLNSC.[<]);
+		IF (operation = ADD) THEN
+			CALL Add(inRef, outRef);
+		ELSEIF (operation = SUB) THEN
+			CALL Sub(inRef, outRef);
+		ELSEIF(operation = MUL) THEN
+			CALL Mul(inRef, outRef);
+		ELSEIF(operation = DIV) THEN
+			CALL Div(inRef, outRef);
+		END IF;
+		
+		IF (broker = BRD001A) THEN
+			SET OutputLocalEnvironment.Destination.MQ.DestinationData.queueManagerName = QMD002A;
+		ELSE
+			SET OutputLocalEnvironment.Destination.MQ.DestinationData.queueManagerName = QMD001A;
+		END IF;
+		SET OutputLocalEnvironment.Destination.MQ.DestinationData.queue = MQRESPONSE;
+		RETURN TRUE;
+	END;
+
+	CREATE PROCEDURE CopyMessageHeaders() BEGIN
+		DECLARE I INTEGER 1;
+		DECLARE J INTEGER;
+		SET J = CARDINALITY(InputRoot.*[]);
+		WHILE I < J DO
+			SET OutputRoot.*[I] = InputRoot.*[I];
+			SET I = I + 1;
+		END WHILE;
+	END;
+
+	CREATE PROCEDURE Add(IN InputRoot REFERENCE, INOUT OutputRoot REFERENCE) BEGIN
+		CREATE FIELD OutputRoot.XMLNSC.tempNS:AddResponse;
+		DECLARE addRsMsgRef REFERENCE TO OutputRoot.XMLNSC.tempNS:AddResponse;
+		SET addRsMsgRef.(XMLNSC.NamespaceDecl)xmlns:addRs = tempNS;
+		SET addRsMsgRef.(XMLNSC.NamespaceDecl)xmlns:xsi = 'http://www.w3.org/2001/XMLSchema-instance';
+		SET addRsMsgRef.tempNS:AddResult = CAST(InputRoot.XMLNSC.tempNS:Add.tempNS:intA AS INT) + CAST(InputRoot.XMLNSC.tempNS:Add.tempNS:intB AS INT);
+	END;
+
+	CREATE PROCEDURE Sub(IN InputRoot REFERENCE, INOUT OutputRoot REFERENCE) BEGIN
+		CREATE FIELD OutputRoot.XMLNSC.tempNS:SubtractResponse;
+		DECLARE subRsMsgRef REFERENCE TO OutputRoot.XMLNSC.tempNS:SubtractResponse;
+		SET subRsMsgRef.(XMLNSC.NamespaceDecl)xmlns:subRs = tempNS;
+		SET subRsMsgRef.(XMLNSC.NamespaceDecl)xmlns:xsi = 'http://www.w3.org/2001/XMLSchema-instance';
+		SET subRsMsgRef.tempNS:SubtractResult = CAST(InputRoot.XMLNSC.tempNS:Subtract.tempNS:intA AS INT) - CAST(InputRoot.XMLNSC.tempNS:Subtract.tempNS:intB AS INT);
+	END;
+	
+	CREATE PROCEDURE Mul(IN InputRoot REFERENCE, INOUT OutputRoot REFERENCE) BEGIN
+		CREATE FIELD OutputRoot.XMLNSC.tempNS:MultiplyResponse;
+		DECLARE mulRsMsgRef REFERENCE TO OutputRoot.XMLNSC.tempNS:MultiplyResponse;
+		SET mulRsMsgRef.(XMLNSC.NamespaceDecl)xmlns:subRs = tempNS;
+		SET mulRsMsgRef.(XMLNSC.NamespaceDecl)xmlns:xsi = 'http://www.w3.org/2001/XMLSchema-instance';
+		SET mulRsMsgRef.tempNS:MultiplyResult = CAST(InputRoot.XMLNSC.tempNS:Multiply.tempNS:intA AS INT) * CAST(InputRoot.XMLNSC.tempNS:Multiply.tempNS:intB AS INT);
+	END;
+	
+	CREATE PROCEDURE Div(IN InputRoot REFERENCE, INOUT OutputRoot REFERENCE) BEGIN
+		CREATE FIELD OutputRoot.XMLNSC.tempNS:DivideResponse;
+		DECLARE divRsMsgRef REFERENCE TO OutputRoot.XMLNSC.tempNS:DivideResponse;
+		SET divRsMsgRef.(XMLNSC.NamespaceDecl)xmlns:divRs = tempNS;
+		SET divRsMsgRef.(XMLNSC.NamespaceDecl)xmlns:xsi = 'http://www.w3.org/2001/XMLSchema-instance';
+		SET divRsMsgRef.tempNS:DivideResult = CAST(InputRoot.XMLNSC.tempNS:Divide.tempNS:intA AS INT) / CAST(InputRoot.XMLNSC.tempNS:Divide.tempNS:intB AS INT);
+	END;
+END MODULE;

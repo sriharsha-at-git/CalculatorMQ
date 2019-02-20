@@ -1,0 +1,32 @@
+BROKER SCHEMA response
+
+DECLARE SOAP CONSTANT CHAR 'SOAP';
+DECLARE HTTP CONSTANT CHAR 'HTTP';
+DECLARE tempNS 		NAMESPACE 'http://tempuri.org/';
+
+CREATE COMPUTE MODULE CalculatorResponse_Compute
+	CREATE FUNCTION Main() RETURNS BOOLEAN
+	BEGIN
+		-- Set HTTP LocalEnvironment for reply to originator
+		DECLARE flowType CHAR FIELDVALUE(Environment.CorrelData.XMLNSC.Message.FlowType);
+		IF (flowType = SOAP) THEN
+			SET OutputLocalEnvironment.Destination.SOAP.Reply.ReplyIdentifier = CAST(Environment.CorrelData.XMLNSC.Message.ReplyIdentifier AS BLOB);
+		ELSEIF(flowType = HTTP) THEN
+			SET OutputLocalEnvironment.Destination.HTTP.RequestIdentifier = CAST(Environment.CorrelData.XMLNSC.Message.RequestIdentifier AS BLOB);
+		END IF;
+		
+		-- Set web service addressing
+		--SET OutputLocalEnvironment.Destination.SOAP.Request.WSA.Action = 'http://localhost:9900/soap/calculator';
+		--SET OutputLocalEnvironment.Destination.SOAP.Request.WSA.MessageID = 'test:my:msg:ID:1234578';
+		--SET OutputLocalEnvironment.Destination.SOAP.Request.WSA.Version = 'Submission-2004/08';
+
+	 
+		-- Reply body		
+		SET OutputRoot.XMLNSC = InputRoot.XMLNSC;
+		SET OutputRoot.XMLNSC.*.(XMLNSC.Attribute)reqProcessor = Environment.CorrelData.XMLNSC.Message.ReqProcesser; 
+		SET OutputRoot.XMLNSC.*.(XMLNSC.Attribute)resProcessor = BrokerName; 
+		RETURN TRUE;
+	END;
+
+	
+END MODULE;
